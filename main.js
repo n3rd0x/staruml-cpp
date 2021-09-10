@@ -30,7 +30,12 @@ function getGenOptions () {
     indentSpaces: app.preferences.get('cpp.gen.indentSpaces'),
     useVector: app.preferences.get('cpp.gen.useVector'),
     includeHeader: app.preferences.get('cpp.gen.includeHeader'),
-    genCpp: app.preferences.get('cpp.gen.genCpp')
+    genCpp: app.preferences.get('cpp.gen.genCpp'),
+    ndxGenDir: app.preferences.get('cpp.ndx.genDir'),
+    ndxGenNamespace: app.preferences.get('cpp.ndx.genNamespace'),
+    ndxGenStyle: app.preferences.get('cpp.ndx.genStyle'),
+    ndxIncPrefix: app.preferences.get('cpp.ndx.incPrefix'),
+    ndxIncUppercase: app.preferences.get('cpp.ndx.incUppercase')
   }
 }
 

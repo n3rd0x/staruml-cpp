@@ -1,4 +1,5 @@
 /*
+* Copyright (c) 2021 T.Sang Tran.
 * Copyright (c) 2014-2018 MKLab. All rights reserved.
 * Copyright (c) 2014 Sebastian Schleemilch.
 *
@@ -81,7 +82,14 @@ class CppCodeGenerator {
     }
   }
 
-  generate (elem, basePath, options) {
+  /**
+  * Generate C++ files.
+  * @param {type.UMLPackage} elem Current UML element.
+  * @param {string} basePath Generated files and directories to be placed.
+  * @param {Object} namespace Current namespace hierarchy.
+  * @param {Object} options Global options.
+  */
+  generate (elem, basePath, namespace, options) {
     this.genOptions = options
 
     var getFilePath = (extenstions) => {
@@ -174,10 +182,23 @@ class CppCodeGenerator {
         codeWriter.writeLine(templatePart)
       }
 
+      // TST 2021-09-10
+      codeWriter.writeLine("/**")
+      codeWriter.writeLine(" *@brief ")
+      codeWriter.writeLine(" */")
+
       codeWriter.writeLine('class ' + elem.name + finalModifier + writeInheritance(elem) + ' {')
       if (classfiedAttributes._public.length > 0) {
         codeWriter.writeLine('public: ')
         codeWriter.indent()
+
+        // TST 2021-09-10
+        if(options.ndxGenStyle) {
+            codeWriter.writeLine("// ************************************************************")
+            codeWriter.writeLine("// Member Declarations")
+            codeWriter.writeLine("// ************************************************************")
+        }
+
         write(classfiedAttributes._public)
         codeWriter.outdent()
       }
@@ -194,7 +215,7 @@ class CppCodeGenerator {
         codeWriter.outdent()
       }
 
-      codeWriter.writeLine('};')
+      codeWriter.writeLine('}; // class ' + elem.name)
     }
 
     var writeClassBody = (codeWriter, elem, cppCodeGen) => {
@@ -231,11 +252,21 @@ class CppCodeGenerator {
 
       // parsing class
       var methodList = cppCodeGen.classifyVisibility(elem.operations.slice(0))
-      var docs = elem.name + ' implementation\n\n'
-      if (typeof elem.documentation === 'string') {
-        docs += elem.documentation
+
+      // TST 2021-09-10
+      if(options.ndxGenStyle) {
+        codeWriter.writeLine("// ************************************************************")
+        codeWriter.writeLine("// Class Implementations")
+        codeWriter.writeLine("// ************************************************************")
       }
-      codeWriter.writeLine(cppCodeGen.getDocuments(docs))
+      else {
+        var docs = elem.name + ' implementation\n\n'
+        if (typeof elem.documentation === 'string') {
+            docs += elem.documentation
+        }
+        codeWriter.writeLine(cppCodeGen.getDocuments(docs))
+      }
+
       writeClassMethod(methodList)
 
       // parsing nested class
@@ -253,24 +284,39 @@ class CppCodeGenerator {
     }
 
     var fullPath, file
+    var curNamespace = namespace
 
     // Package -> as namespace or not
     if (elem instanceof type.UMLPackage) {
-      fullPath = path.join(basePath, elem.name)
-      fs.mkdirSync(fullPath)
+      // TST 2021-09-10
+      if (this.genOptions.ndxGenDir) {
+        fullPath = path.join(basePath, elem.name)
+        fs.mkdirSync(fullPath)
+      }
+      else {
+        fullPath = basePath
+      }
+
+      if (!this.genOptions.ndxGenNamespace) {
+        curNamespace = []
+      }
+      else {
+        curNamespace.push(elem.name)
+      }
+
       if (Array.isArray(elem.ownedElements)) {
         elem.ownedElements.forEach(child => {
-          return this.generate(child, fullPath, options)
+          return this.generate(child, fullPath, curNamespace, options)
         })
       }
     } else if (elem instanceof type.UMLClass) {
       // generate class header elem_name.h
       file = getFilePath(_CPP_CODE_GEN_H)
-      fs.writeFileSync(file, this.writeHeaderSkeletonCode(elem, options, writeClassHeader))
+      fs.writeFileSync(file, this.writeHeaderSkeletonCode(elem, curNamespace, options, writeClassHeader))
       // generate class cpp elem_name.cpp
       if (options.genCpp) {
         file = getFilePath(_CPP_CODE_GEN_CPP)
-        fs.writeFileSync(file, this.writeBodySkeletonCode(elem, options, writeClassBody))
+        fs.writeFileSync(file, this.writeBodySkeletonCode(elem, curNamespace, options, writeClassBody))
       }
     } else if (elem instanceof type.UMLInterface) {
       /*
@@ -278,25 +324,97 @@ class CppCodeGenerator {
        */
       // generate interface header ONLY elem_name.h
       file = getFilePath(_CPP_CODE_GEN_H)
-      fs.writeFileSync(file, this.writeHeaderSkeletonCode(elem, options, writeClassHeader))
+      fs.writeFileSync(file, this.writeHeaderSkeletonCode(elem, curNamespace, options, writeClassHeader))
     } else if (elem instanceof type.UMLEnumeration) {
       // generate enumeration header ONLY elem_name.h
       file = getFilePath(_CPP_CODE_GEN_H)
-      fs.writeFileSync(file, this.writeHeaderSkeletonCode(elem, options, writeEnumeration))
+      fs.writeFileSync(file, this.writeHeaderSkeletonCode(elem, curNamespace, options, writeEnumeration))
     }
   }
+
+
+  /**
+   * Write start of namespace.
+   *
+   * @param {Object} codeWriter Write object.
+   * @param {Object} namespace Namespace list.
+   */
+  writeStartNamespace(codeWriter, namespaces) {
+    if (namespaces.length > 0) {
+        for (var i = 0; i < namespaces.length; i++) {
+            codeWriter.writeLine("namespace " + namespaces[i] + " {")
+        }
+        codeWriter.writeLine()
+    }
+  }
+
+
+  /**
+   * Write end of namespace.
+   *
+   * @param {Object} codeWriter Write object.
+   * @param {Object} namespace Namespace list.
+   */
+   writeEndNamespace(codeWriter, namespaces) {
+    if (namespaces.length > 0) {
+        codeWriter.writeLine()
+        for (var i = 0; i < namespaces.length; i++) {
+            codeWriter.writeLine("} // namespace " + namespaces[i])
+        }
+    }
+  }
+
+  /**
+   * Make copyright documentation.
+   *
+   * @param {Object} elem Current element.
+   * @param {Object} options List of options..
+   * @param {boolean} headerFile Flag that this is a header file.
+   */
+  makeCopyright(elem, options, headerFile) {
+    var doc = ''
+    if(options.ndxGenStyle) {
+        if(app.project.getProject().copyright && app.project.getProject().copyright.length > 0) {
+            doc += '\n ' + app.project.getProject().copyright + "\n"
+        }
+
+        doc += '\n@filename ' + elem.name + (headerFile ? '.h' : '.cpp')
+
+        if(app.project.getProject().author && app.project.getProject().author.length > 0) {
+            doc += '\n@author   ' + app.project.getProject().author
+        }
+
+        var today = new Date();
+        var date = today.toISOString().split('T')[0]
+        doc += '\n@created  ' + date + '\n'
+
+        copyrightHeader = this.getDocuments(doc)
+    }
+  }
+
 
   /**
    * Write *.h file. Implement functor to each uml type.
    * Returns text
    *
    * @param {Object} elem
+   * @param {Object} namespace Current namespace hierarchy.
    * @param {Object} options
    * @param {Object} funct
    * @return {string}
    */
-  writeHeaderSkeletonCode (elem, options, funct) {
-    var headerString = '_' + elem.name.toUpperCase() + '_H'
+  writeHeaderSkeletonCode (elem, namespace, options, funct) {
+    // TST 2021-09-10
+    this.makeCopyright(elem, options, true)
+
+    var headerString = options.ndxIncPrefix
+    if (options.ndxIncUppercase) {
+        headerString += elem.name.toUpperCase() + '_H'
+    }
+    else {
+        headerString += elem.name + '_h'
+    }
+
     var codeWriter = new codegen.CodeWriter(this.getIndentString(options))
     var includePart = this.getIncludePart(elem)
     codeWriter.writeLine(copyrightHeader)
@@ -309,10 +427,15 @@ class CppCodeGenerator {
       codeWriter.writeLine(includePart)
       codeWriter.writeLine()
     }
+
+    this.writeStartNamespace(codeWriter, namespace)
+
     funct(codeWriter, elem, this)
 
+    this.writeEndNamespace(codeWriter, namespace)
+
     codeWriter.writeLine()
-    codeWriter.writeLine('#endif //' + headerString)
+    codeWriter.writeLine('#endif // ' + headerString)
     return codeWriter.getData()
   }
 
@@ -321,17 +444,26 @@ class CppCodeGenerator {
    * Returns text
    *
    * @param {Object} elem
+   * @param {Object} namespace Current namespace hierarchy.
    * @param {Object} options
    * @param {Object} functor
    * @return {Object} string
    */
-  writeBodySkeletonCode (elem, options, funct) {
+  writeBodySkeletonCode (elem, namespace, options, funct) {
+    // TST 2021-09-10
+    this.makeCopyright(elem, options, false)
+
     var codeWriter = new codegen.CodeWriter(this.getIndentString(options))
     codeWriter.writeLine(copyrightHeader)
     codeWriter.writeLine()
     codeWriter.writeLine('#include "' + elem.name + '.h"')
     codeWriter.writeLine()
+
+    this.writeStartNamespace(codeWriter, namespace)
+
     funct(codeWriter, elem, this)
+
+    this.writeEndNamespace(codeWriter, namespace)
     return codeWriter.getData()
   }
 
@@ -702,7 +834,7 @@ class CppCodeGenerator {
 
 function generate (baseModel, basePath, options) {
   var cppCodeGenerator = new CppCodeGenerator(baseModel, basePath)
-  cppCodeGenerator.generate(baseModel, basePath, options)
+  cppCodeGenerator.generate(baseModel, basePath, [], options)
 }
 
 function getVersion () { return versionString }

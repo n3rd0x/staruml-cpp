@@ -36,6 +36,40 @@
       "type": "check",
       "default": true
     },
+    "cpp.ndx": {
+        "text": "Nerdox Settings",
+        "type": "section"
+    },
+    "cpp.ndx.genDir": {
+        "text": "Generate Directory",
+        "description": "Generate directory acording to package definition.",
+        "type": "check",
+        "default": false
+    },
+    "cpp.ndx.genNamespace": {
+        "text": "Generate Namespace",
+        "description": "Generate namespace acording to package definition.",
+        "type": "check",
+        "default": true
+    },
+    "cpp.ndx.genStyle": {
+        "text": "Generate Custom Style",
+        "description": "Generate custom style.",
+        "type": "check",
+        "default": true
+    },
+    "cpp.ndx.incPrefix": {
+        "text": "Prefix",
+        "description": "Prefix.",
+        "type": "string",
+        "default": ""
+    },
+    "cpp.ndx.incUppercase": {
+        "text": "Use Uppercase",
+        "description": "Use uppercase naming convension.",
+        "type": "check",
+        "default": false
+    },
     "cpp.rev": {
       "text": "C++ Reverse Engineering",
       "type": "section"
